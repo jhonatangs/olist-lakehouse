@@ -1,0 +1,34 @@
+# ========================
+# Airflow / Astro CLI
+# ========================
+.astro/
+airflow_settings.yaml
+airflow-webserver.pid
+webserver_config.py
+airflow.cfg
+airflow.db
+logs/
+.env
+
+# ========================
+# Python
+# ========================
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# ========================
+# Terraform
+# ========================
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+.terraform.lock.hcl
+
+# ========================
+# Sistema Operacional e AWS
+# ========================
+.DS_Store
+.aws/
