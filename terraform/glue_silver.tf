@@ -21,7 +21,7 @@ locals {
 resource "aws_glue_job" "silver_iceberg_jobs" {
   for_each = local.lakehouse_tables
 
-  name     = "jgs-bronze-to-silver-${each.value}"
+  name     = "jgs-bronze-to-silver-${each.key}"
   role_arn = aws_iam_role.glue_crawler_role.arn
   
   glue_version      = "4.0"
@@ -36,7 +36,7 @@ resource "aws_glue_job" "silver_iceberg_jobs" {
   default_arguments = {
     "--job-language"                     = "python"
     "--datalake-formats"                 = "iceberg"
-    "--BRONZE_PATH"                      = "s3://${aws_s3_bucket.datalake_layers["bronze"].bucket}/olist_dms_export/public/${each.value}/"
+    "--BRONZE_PATH"                      = "s3://${aws_s3_bucket.datalake_layers["bronze"].bucket}/olist_dms_export/public/${each.key}/"
     "--SILVER_DB"                        = aws_glue_catalog_database.silver_db.name
     "--TABLE_NAME"                       = each.key
     "--PRIMARY_KEY"                      = each.value
@@ -46,6 +46,6 @@ resource "aws_glue_job" "silver_iceberg_jobs" {
   tags = {
     Environment = "dev"
     ManagedBy   = "terraform"
-    Table       = each.value
+    Table       = each.key
   }
 }

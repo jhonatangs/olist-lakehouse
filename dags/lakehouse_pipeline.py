@@ -3,6 +3,7 @@ from airflow import DAG
 from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from airflow.providers.amazon.aws.operators.glue_crawler import GlueCrawlerOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.models import Variable
 
 
 tables = [
@@ -26,6 +27,8 @@ default_args = {
     "retry_delay": timedelta(minutes=2),
 }
 
+script_path = Variable.get("glue_script_path")
+
 with DAG(
     dag_id="lakehouse_pipeline",
     default_args=default_args,
@@ -46,6 +49,9 @@ with DAG(
     process_olist_data = GlueJobOperator.partial(
         task_id="process_olist_data_silver",
         region_name="us-east-1",
+        iam_role_name="jgs-framework-glue-role",
+        script_location=script_path,
+        update_config=False,
         wait_for_completion=True,
         deferrable=True,
     ).expand(
