@@ -25,5 +25,5 @@ jobs:
 
             - name: Sync Glue scripts to S3
               run: |
-                aws s3 sync src/glue/ s3://${{ secrets.GLUE_SCRIPTS_BUCKET }}/scripts/ --delete
+                aws s3 sync src/glue/ s3://${{ secrets.S3_SCRIPTS_BUCKET }}/scripts/ --delete
                 echo "Glue scripts deployed with success!"

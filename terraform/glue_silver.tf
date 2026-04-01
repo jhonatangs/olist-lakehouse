@@ -14,7 +14,7 @@ locals {
     "olist_order_payments",
     "olist_order_reviews",
     "olist_sellers",
-    "olist_category_name_translation"
+    "product_category_name_translation"
   ]
 }
 

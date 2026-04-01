@@ -37,7 +37,7 @@ resource "aws_iam_role_policy_attachment" "glue_service_attachment" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
 }
 
-# Permissão explícita para o Glue acessar a camada Bronze S3
+# Permissão explícita para o Glue acessar o S3
 resource "aws_iam_role_policy" "glue_s3_policy" {
   name = "jgs-glue-s3-policy"
   role = aws_iam_role.glue_crawler_role.id
@@ -55,6 +55,8 @@ resource "aws_iam_role_policy" "glue_s3_policy" {
         Resource = [
           aws_s3_bucket.datalake_layers["bronze"].arn,
           "${aws_s3_bucket.datalake_layers["bronze"].arn}/*",
+          aws_s3_bucket.datalake_layers["silver"].arn,
+          "${aws_s3_bucket.datalake_layers["silver"].arn}/*",
           aws_s3_bucket.athena_results.arn,
           "${aws_s3_bucket.athena_results.arn}/*"
         ]
