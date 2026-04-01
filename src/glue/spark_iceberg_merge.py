@@ -3,6 +3,8 @@ from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
+from pyspark.sql.window import Window
+from pyspark.sql.functions import col, row_number
 
 
 args = getResolvedOptions(
@@ -21,13 +23,20 @@ table_name = args["TABLE_NAME"]
 print(f"Lendo dados da Bronze em: {bronze_path}")
 df_bronze = spark.read.parquet(bronze_path)
 
-df_bronze.createOrReplaceTempView("bronze_updates")
+# Deduplicação em Memória (Micro-batch)
+window_spec = Window.partitionBy("order_id").orderBy(col("dms_extracted_at").desc())
+df_bronze_clean = (
+    df_bronze.withColumn("row_num", row_number().over(window_spec))
+    .filter(col("row_num") == 1)
+    .drop("row_num")
+)
+df_bronze_clean.createOrReplaceTempView("bronze_updates")
 
 table_exists = spark.catalog.tableExists(f"glue_catalog.{silver_db}.{table_name}")
 
 if not table_exists:
     print("Primeira execução: Criando a tabela Iceberg na camada Silver...")
-    df_bronze.writeTo(f"glue_catalog.{silver_db}.{table_name}").tableProperty(
+    df_bronze_clean.writeTo(f"glue_catalog.{silver_db}.{table_name}").tableProperty(
         "format-version", "2"
     ).create()
 else:
