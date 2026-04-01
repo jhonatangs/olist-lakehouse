@@ -34,9 +34,10 @@ resource "aws_iam_instance_profile" "bastion_profile" {
 }
 
 resource "aws_instance" "bastion" {
-  ami                  = data.aws_ami.amazon_linux.id
-  instance_type        = "t3.micro"
-  iam_instance_profile = aws_iam_instance_profile.bastion_profile.name
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = "t3.micro"
+  iam_instance_profile   = aws_iam_instance_profile.bastion_profile.name
+  vpc_security_group_ids = [aws_security_group.etl_sg.id]
 
   tags = {
     Name        = "jgs-bastion-host"
