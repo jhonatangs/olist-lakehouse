@@ -7,16 +7,16 @@ terraform {
   }
 }
 
-# Configurando o provedor AWS para usar a região que definimos
+# Configurando o provedor AWS para usar a região definida
 provider "aws" {
   region = "us-east-1"
   
-  # Boas práticas: Tags globais para sabermos de onde vêm os recursos
+  # Tags globais para saber de onde vêm os recursos
   default_tags {
     tags = {
-      Projeto     = "Framework-Lakehouse"
-      Ambiente    = "Dev"
-      Gerenciado  = "Terraform"
+      Name        = "Lakehouse"
+      Environment = "Dev"
+      ManagedBy   = "Terraform"
     }
   }
 }

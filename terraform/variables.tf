@@ -12,5 +12,4 @@ variable "db_password" {
 variable "db_name" {
   description = "Initial database name"
   type        = string
-  default     = "ecommerce_db"
 }

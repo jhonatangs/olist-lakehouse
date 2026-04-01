@@ -1,21 +1,23 @@
-# terraform/network.tf
-
-# 1. Buscando a VPC padrão (Rede) que já existe na sua conta
 data "aws_vpc" "default" {
   default = true
 }
 
-# 2. O "Crachá" para os nossos serviços de ETL (DMS, Lambda, Glue)
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
 resource "aws_security_group" "etl_sg" {
-  name        = "jgs-framework-etl-sg"
+  name        = "jgs-etl-sg"
   description = "Security Group para servicos de processamento de dados"
   vpc_id      = data.aws_vpc.default.id
 
-  # Regra de Saída (Egress): O ETL pode acessar a internet (ex: baixar bibliotecas)
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1" # -1 significa "todos os protocolos"
+    protocol    = "-1" 
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -26,25 +28,47 @@ resource "aws_security_group" "etl_sg" {
   }
 }
 
-# 3. A "Porta de Entrada" do nosso Banco de Dados (RDS)
 resource "aws_security_group" "rds_sg" {
-  name        = "jgs-framework-rds-sg"
+  name        = "jgs-rds-sg"
   description = "Security Group para o banco PostgreSQL"
   vpc_id      = data.aws_vpc.default.id
 
-  # Regra de Entrada (Ingress): QUEM PODE ENTRAR NO BANCO?
+  # Regra Única e Segura: Aceita apenas quem tem o crachá do ETL
   ingress {
     description     = "Permite acesso apenas de recursos usando o ETL Security Group"
-    from_port       = 5432 # Porta padrão do PostgreSQL
+    from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    
-    # Em vez de um IP, passamos o ID do Security Group do ETL
     security_groups = [aws_security_group.etl_sg.id] 
   }
 
   tags = {
     Name        = "rds-security-group"
+    Environment = "dev"
+    ManagedBy   = "terraform"
+  }
+}
+
+# Subnet Group do RDS
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name       = "jgs-rds-subnet-group"
+  subnet_ids = data.aws_subnets.default.ids
+
+  tags = {
+    Name        = "rds-subnet-group"
+    Environment = "dev"
+    ManagedBy   = "terraform"
+  }
+}
+
+# Subnet Group do DMS
+resource "aws_dms_replication_subnet_group" "dms_subnet_group" {
+  replication_subnet_group_id          = "jgs-dms-subnet-group"
+  replication_subnet_group_description = "Subnet group para DMS replication instance"
+  subnet_ids                           = data.aws_subnets.default.ids
+
+  tags = {
+    Name        = "dms-subnet-group"
     Environment = "dev"
     ManagedBy   = "terraform"
   }
