@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'src/glue/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
 
 jobs:
     deploy-to-s3:
