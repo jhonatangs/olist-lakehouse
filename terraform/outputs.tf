@@ -17,3 +17,8 @@ output "s3_bucket_names" {
   description = "Lista dos nomes reais dos buckets criados no S3"
   value       = { for k, v in aws_s3_bucket.datalake_layers : k => v.bucket }
 }
+
+output "glue_scripts_bucket" {
+  description = "Nome do bucket onde o GitHub Actions deve jogar os scripts"
+  value       = aws_s3_bucket.athena_results.bucket
+}
