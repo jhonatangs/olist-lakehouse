@@ -5,21 +5,21 @@ resource "aws_glue_catalog_database" "silver_db" {
 }
 
 locals {
-  lakehouse_tables = [
-    "olist_orders",
-    "olist_customers",
-    "olist_products",
-    "olist_geolocation",
-    "olist_order_items",
-    "olist_order_payments",
-    "olist_order_reviews",
-    "olist_sellers",
-    "product_category_name_translation"
-  ]
+  lakehouse_tables = {
+    "olist_orders"                          = "order_id"
+    "olist_customers"                       = "customer_id"
+    "olist_products"                        = "product_id"
+    "olist_geolocation"                     = "geolocation_zip_code_prefix"
+    "olist_order_items"                     = "order_item_id"
+    "olist_order_payments"                  = "payment_sequential"
+    "olist_order_reviews"                   = "review_id"
+    "olist_sellers"                         = "seller_id"
+    "product_category_name_translation"     = "product_category_name"
+  }
 }
 
 resource "aws_glue_job" "silver_iceberg_jobs" {
-  for_each = toset(local.lakehouse_tables)
+  for_each = local.lakehouse_tables
 
   name     = "jgs-bronze-to-silver-${each.value}"
   role_arn = aws_iam_role.glue_crawler_role.arn
@@ -38,7 +38,8 @@ resource "aws_glue_job" "silver_iceberg_jobs" {
     "--datalake-formats"                 = "iceberg"
     "--BRONZE_PATH"                      = "s3://${aws_s3_bucket.datalake_layers["bronze"].bucket}/olist_dms_export/public/${each.value}/"
     "--SILVER_DB"                        = aws_glue_catalog_database.silver_db.name
-    "--TABLE_NAME"                       = each.value
+    "--TABLE_NAME"                       = each.key
+    "--PRIMARY_KEY"                      = each.value
     "--conf"                             = "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions --conf spark.sql.catalog.glue_catalog=org.apache.iceberg.spark.SparkCatalog --conf spark.sql.catalog.glue_catalog.warehouse=s3://${aws_s3_bucket.datalake_layers["silver"].bucket}/iceberg/ --conf spark.sql.catalog.glue_catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog --conf spark.sql.catalog.glue_catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO"
   }
 

@@ -8,7 +8,7 @@ from pyspark.sql.functions import col, row_number
 
 
 args = getResolvedOptions(
-    sys.argv, ["JOB_NAME", "BRONZE_PATH", "SILVER_DB", "TABLE_NAME"]
+    sys.argv, ["JOB_NAME", "BRONZE_PATH", "SILVER_DB", "TABLE_NAME", "PRIMARY_KEY"]
 )
 sc = SparkContext()
 glueContext = GlueContext(sc)
@@ -19,12 +19,13 @@ job.init(args["JOB_NAME"], args)
 bronze_path = args["BRONZE_PATH"]
 silver_db = args["SILVER_DB"]
 table_name = args["TABLE_NAME"]
+pk = args["PRIMARY_KEY"]
 
 print(f"Lendo dados da Bronze em: {bronze_path}")
 df_bronze = spark.read.parquet(bronze_path)
 
 # Deduplicação em Memória (Micro-batch)
-window_spec = Window.partitionBy("order_id").orderBy(col("dms_extracted_at").desc())
+window_spec = Window.partitionBy(pk).orderBy(col("dms_extracted_at").desc())
 df_bronze_clean = (
     df_bronze.withColumn("row_num", row_number().over(window_spec))
     .filter(col("row_num") == 1)
@@ -44,7 +45,7 @@ else:
     spark.sql(f"""
         MERGE INTO glue_catalog.{silver_db}.{table_name} AS target
         USING bronze_updates AS source
-        ON target.order_id = source.order_id
+        ON target.{pk} = source.{pk}
         WHEN MATCHED AND source.dms_extracted_at > target.dms_extracted_at THEN
             UPDATE SET *
         WHEN NOT MATCHED THEN

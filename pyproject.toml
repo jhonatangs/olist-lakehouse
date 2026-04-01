@@ -5,5 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiobotocore>=3.3.0",
+    "apache-airflow-providers-amazon[aio-botocore]>=9.24.0",
     "pyspark>=4.1.1",
 ]
