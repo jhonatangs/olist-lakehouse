@@ -7,6 +7,14 @@ from pyspark.sql.window import Window
 from pyspark.sql.functions import col, row_number
 
 
+def check_iceberg_table_exists(spark, database, table_name):
+    try:
+        spark.sql(f"DESCRIBE TABLE glue_catalog.{database}.{table_name}")
+        return True
+    except Exception:
+        return False
+
+
 args = getResolvedOptions(
     sys.argv, ["JOB_NAME", "BRONZE_PATH", "SILVER_DB", "TABLE_NAME", "PRIMARY_KEY"]
 )
@@ -33,7 +41,7 @@ df_bronze_clean = (
 )
 df_bronze_clean.createOrReplaceTempView("bronze_updates")
 
-table_exists = spark.catalog.tableExists(f"glue_catalog.{silver_db}.{table_name}")
+table_exists = check_iceberg_table_exists(spark, silver_db, table_name)
 
 if not table_exists:
     print("Primeira execução: Criando a tabela Iceberg na camada Silver...")
