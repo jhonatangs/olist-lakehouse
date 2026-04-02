@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from airflow.providers.amazon.aws.operators.glue_crawler import GlueCrawlerOperator
+from airflow.providers.amazon.aws.operators.athena import AthenaOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.models import Variable
 
@@ -28,6 +29,7 @@ default_args = {
 }
 
 script_path = Variable.get("glue_script_path")
+athena_results = Variable.get("athena_results_bucket")
 
 with DAG(
     dag_id="lakehouse_pipeline",
@@ -36,6 +38,7 @@ with DAG(
     schedule="@daily",
     start_date=datetime(2026, 4, 1),
     catchup=False,
+    template_searchpath=["/usr/local/airflow/include/sql"],
     tags=["lakehouse", "aws_glue", "iceberg", "cdc", "olist"],
 ) as dag:
     start_pipeline = EmptyOperator(task_id="start_pipeline")
@@ -58,6 +61,27 @@ with DAG(
         job_name=[f"jgs-bronze-to-silver-{table}" for table in tables],
     )
 
+    drop_gold_obt = AthenaOperator(
+        task_id="drop_gold_obt",
+        query="DROP TABLE IF EXISTS ecommerce_gold.gold_obt_sales;",
+        database="ecommerce_gold",
+        output_location=athena_results,
+    )
+
+    create_gold_obt = AthenaOperator(
+        task_id="create_gold_obt",
+        query="obt.sql",
+        database="ecommerce_gold",
+        output_location=athena_results,
+    )
+
     end_pipeline = EmptyOperator(task_id="end_pipeline")
 
-    start_pipeline >> run_bronze_crawler >> process_olist_data >> end_pipeline
+    (
+        start_pipeline
+        >> run_bronze_crawler
+        >> process_olist_data
+        >> drop_gold_obt
+        >> create_gold_obt
+        >> end_pipeline
+    )
