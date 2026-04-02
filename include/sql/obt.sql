@@ -1,6 +1,7 @@
 CREATE TABLE ecommerce_gold.gold_obt_sales
 WITH (
     table_type = 'ICEBERG',
+    is_external = false,
     location = '{{ var.value.gold_bucket_path }}/gold_obt_sales/'
 ) AS
 SELECT
