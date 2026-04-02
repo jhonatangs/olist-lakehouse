@@ -26,6 +26,7 @@ tables_gold = {
     "dim_products": "dim_products.sql",
     "dim_sellers": "dim_sellers.sql",
     "fact_orders": "fact_orders.sql",
+    "mart_rfm_summary": "mart_rfm_summary.sql",
 }
 
 default_args = {

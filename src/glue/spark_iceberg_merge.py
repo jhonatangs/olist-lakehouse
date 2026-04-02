@@ -27,13 +27,14 @@ job.init(args["JOB_NAME"], args)
 bronze_path = args["BRONZE_PATH"]
 silver_db = args["SILVER_DB"]
 table_name = args["TABLE_NAME"]
-pk = args["PRIMARY_KEY"]
+pk_string = args["PRIMARY_KEY"]
+pk_list = [k.strip() for k in pk_string.split(",")]
 
 print(f"Lendo dados da Bronze em: {bronze_path}")
 df_bronze = spark.read.parquet(bronze_path)
 
 # Deduplicação em Memória (Micro-batch)
-window_spec = Window.partitionBy(pk).orderBy(col("dms_extracted_at").desc())
+window_spec = Window.partitionBy(*pk_list).orderBy(col("dms_extracted_at").desc())
 df_bronze_clean = (
     df_bronze.withColumn("row_num", row_number().over(window_spec))
     .filter(col("row_num") == 1)
@@ -42,6 +43,8 @@ df_bronze_clean = (
 df_bronze_clean.createOrReplaceTempView("bronze_updates")
 
 table_exists = check_iceberg_table_exists(spark, silver_db, table_name)
+
+merge_condition = " AND ".join([f"target.{k} = source.{k}" for k in pk_list])
 
 if not table_exists:
     print("Primeira execução: Criando a tabela Iceberg na camada Silver...")
@@ -53,7 +56,7 @@ else:
     spark.sql(f"""
         MERGE INTO glue_catalog.{silver_db}.{table_name} AS target
         USING bronze_updates AS source
-        ON target.{pk} = source.{pk}
+        ON {merge_condition}
         WHEN MATCHED AND source.dms_extracted_at > target.dms_extracted_at THEN
             UPDATE SET *
         WHEN NOT MATCHED THEN

@@ -5,8 +5,8 @@ WITH (
     location = '{{ var.value.gold_bucket_path }}/dim_sellers/'
 ) AS
 SELECT
-    seller_id,
-    seller_zip_code_prefix AS zip_code,
-    seller_city AS city,
-    seller_state AS state
-FROM ecommerce_silver.olist_sellers;
+    s.seller_id,
+    s.seller_zip_code_prefix AS zip_code,
+    s.seller_city AS city,
+    s.seller_state AS state
+FROM ecommerce_silver.olist_sellers s;
