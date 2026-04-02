@@ -4,6 +4,7 @@ from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from airflow.providers.amazon.aws.operators.glue_crawler import GlueCrawlerOperator
 from airflow.providers.amazon.aws.operators.athena import AthenaOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.utils.task_group import TaskGroup
 from airflow.models import Variable
 
 
@@ -18,6 +19,14 @@ tables = [
     "olist_sellers",
     "product_category_name_translation",
 ]
+
+tables_gold = {
+    "gold_obt_sales": "obt.sql",
+    "dim_clients": "dim_clients.sql",
+    "dim_products": "dim_products.sql",
+    "dim_sellers": "dim_sellers.sql",
+    "fact_orders": "fact_orders.sql",
+}
 
 default_args = {
     "owner": "jhongs",
@@ -61,19 +70,23 @@ with DAG(
         job_name=[f"jgs-bronze-to-silver-{table}" for table in tables],
     )
 
-    drop_gold_obt = AthenaOperator(
-        task_id="drop_gold_obt",
-        query="DROP TABLE IF EXISTS ecommerce_gold.gold_obt_sales;",
-        database="ecommerce_gold",
-        output_location=athena_results,
-    )
+    with TaskGroup(group_id="process_gold_layer") as process_gold_layer:
+        for table_name, sql_file in tables_gold.items():
+            drop_table = AthenaOperator(
+                task_id=f"drop_{table_name}",
+                query=f"DROP TABLE IF EXISTS ecommerce_gold.{table_name};",
+                database="ecommerce_gold",
+                output_location=athena_results,
+            )
 
-    create_gold_obt = AthenaOperator(
-        task_id="create_gold_obt",
-        query="obt.sql",
-        database="ecommerce_gold",
-        output_location=athena_results,
-    )
+            create_table = AthenaOperator(
+                task_id=f"create_{table_name}",
+                query=sql_file,
+                database="ecommerce_gold",
+                output_location=athena_results,
+            )
+
+            drop_table >> create_table
 
     end_pipeline = EmptyOperator(task_id="end_pipeline")
 
@@ -81,7 +94,6 @@ with DAG(
         start_pipeline
         >> run_bronze_crawler
         >> process_olist_data
-        >> drop_gold_obt
-        >> create_gold_obt
+        >> process_gold_layer
         >> end_pipeline
     )
