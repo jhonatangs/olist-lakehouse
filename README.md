@@ -1,45 +1,100 @@
-Overview
-========
+# 🛒 E-Commerce Data Lakehouse: Arquitetura AWS & Apache Iceberg
 
-Welcome to Astronomer! This project was generated after you ran 'astro dev init' using the Astronomer CLI. This readme describes the contents of the project, as well as how to run Apache Airflow on your local machine.
+![Status](https://img.shields.io/badge/Status-Completed-success)
+![AWS](https://img.shields.io/badge/Cloud-AWS-FF9900?logo=amazonaws&logoColor=white)
+![Apache Iceberg](https://img.shields.io/badge/Format-Apache%20Iceberg-00d2ff)
+![Apache Airflow](https://img.shields.io/badge/Orchestration-Apache%20Airflow-017CEE?logo=apacheairflow&logoColor=white)
+![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC?logo=terraform&logoColor=white)
 
-Project Contents
-================
+## 📌 Visão Geral do Projeto
+Este projeto implementa uma arquitetura moderna de **Data Lakehouse** de ponta a ponta na nuvem AWS. O objetivo é ingerir, processar e modelar dados do dataset público de e-commerce da Olist, transformando dados transacionais brutos em modelos analíticos otimizados para consumo por ferramentas de Business Intelligence (BI) e Agentes de Inteligência Artificial.
 
-Your Astro project contains the following files and folders:
+A esteira de dados é totalmente orquestrada e idempotente, garantindo a qualidade e integridade dos dados através do processamento CDC (Change Data Capture) e do formato Apache Iceberg.
 
-- dags: This folder contains the Python files for your Airflow DAGs. By default, this directory includes one example DAG:
-    - `example_astronauts`: This DAG shows a simple ETL pipeline example that queries the list of astronauts currently in space from the Open Notify API and prints a statement for each astronaut. The DAG uses the TaskFlow API to define tasks in Python, and dynamic task mapping to dynamically print a statement for each astronaut. For more on how this DAG works, see our [Getting started tutorial](https://www.astronomer.io/docs/learn/get-started-with-airflow).
-- Dockerfile: This file contains a versioned Astro Runtime Docker image that provides a differentiated Airflow experience. If you want to execute other commands or overrides at runtime, specify them here.
-- include: This folder contains any additional files that you want to include as part of your project. It is empty by default.
-- packages.txt: Install OS-level packages needed for your project by adding them to this file. It is empty by default.
-- requirements.txt: Install Python packages needed for your project by adding them to this file. It is empty by default.
-- plugins: Add custom or community plugins for your project to this file. It is empty by default.
-- airflow_settings.yaml: Use this local-only file to specify Airflow Connections, Variables, and Pools instead of entering them in the Airflow UI as you develop DAGs in this project.
+## 🏗️ Arquitetura de Dados
 
-Deploy Your Project Locally
-===========================
+O pipeline segue a arquitetura **Medallion** (Bronze, Silver e Gold):
 
-Start Airflow on your local machine by running 'astro dev start'.
+```mermaid
+graph TD
+    subgraph "Origem Transacional"
+        PG[(PostgreSQL\nBanco de Produção)]
+    end
 
-This command will spin up five Docker containers on your machine, each for a different Airflow component:
+    subgraph "AWS Cloud - Data Lakehouse"
+        subgraph "🥉 Camada Bronze (Raw)"
+            DMS(AWS DMS\nCDC) --> S3_B[(S3 Bucket\nArquivos Parquet)]
+            S3_B -.-> CRAWLER(AWS Glue\nCrawler)
+        end
 
-- Postgres: Airflow's Metadata Database
-- Scheduler: The Airflow component responsible for monitoring and triggering tasks
-- DAG Processor: The Airflow component responsible for parsing DAGs
-- API Server: The Airflow component responsible for serving the Airflow UI and API
-- Triggerer: The Airflow component responsible for triggering deferred tasks
+        subgraph "🥈 Camada Silver (Cleansed)"
+            GLUE(AWS Glue / PySpark\nData Quality & Deduplicação)
+            S3_B --> GLUE
+            GLUE --> S3_S[(S3 Bucket\nApache Iceberg)]
+        end
 
-When all five containers are ready the command will open the browser to the Airflow UI at http://localhost:8080/. You should also be able to access your Postgres Database at 'localhost:5432/postgres' with username 'postgres' and password 'postgres'.
+        subgraph "🥇 Camada Gold (Analytics)"
+            ATHENA(Amazon Athena\nServerless SQL)
+            S3_S --> ATHENA
+            ATHENA --> S3_G[(S3 Bucket\nApache Iceberg)]
+        end
+    end
 
-Note: If you already have either of the above ports allocated, you can either [stop your existing Docker containers or change the port](https://www.astronomer.io/docs/astro/cli/troubleshoot-locally#ports-are-not-available-for-my-local-airflow-webserver).
+    subgraph "Orquestração & IaC"
+        AF{Apache Airflow}
+        TF{Terraform}
+    end
 
-Deploy Your Project to Astronomer
-=================================
+    PG -- "Full Load + CDC" --> DMS
+    
+    AF -. "Trigger & Wait" .-> CRAWLER
+    AF -. "Dynamic Task Mapping" .-> GLUE
+    AF -. "Task Groups (Paralelismo)" .-> ATHENA
+```
 
-If you have an Astronomer account, pushing code to a Deployment on Astronomer is simple. For deploying instructions, refer to Astronomer documentation: https://www.astronomer.io/docs/astro/deploy-code/
+### 🥉 Camada Bronze (Ingestão Raw)
+* **Ferramenta:** AWS Database Migration Service (DMS).
+* **Processo:** Extração contínua (CDC) do PostgreSQL de produção. Os dados são salvos em sua forma bruta no S3 em formato `.parquet`.
+* **Catálogo:** AWS Glue Crawler identifica automaticamente as alterações de schema e atualiza o AWS Glue Data Catalog.
 
-Contact
-=======
+### 🥈 Camada Silver (Limpeza e Padronização)
+* **Ferramenta:** AWS Glue Jobs (PySpark) + Apache Iceberg.
+* **Processo:** Processamento massivo rodando de forma efêmera e paralela. O script PySpark utiliza *Window Functions* para aplicar deduplicação de registros via micro-batch, lidando inclusive com chaves compostas complexas (ex: `order_id` + `order_item_id`).
+* **Storage:** Utilização do comando `MERGE INTO` (Upsert) habilitado pelas transações ACID do formato **Apache Iceberg**, mantendo o histórico e controle de versão no nível do arquivo físico.
 
-The Astronomer CLI is maintained with love by the Astronomer team. To report a bug or suggest a change, reach out to our support.
+### 🥇 Camada Gold (Modelagem Analítica)
+* **Ferramenta:** Amazon Athena.
+* **Processo:** Construção de lógicas de negócio via `CREATE TABLE AS SELECT` (CTAS), filtrando anomalias (pedidos cancelados) e cruzando entidades.
+* **Modelagens Implementadas:**
+  1. **OBT (One Big Table):** Tabela desnormalizada com todos os dados granulares para exploração rápida e Machine Learning.
+  2. **Star Schema (Modelo Estrela):** Separação em `fact_orders`, `dim_clients`, `dim_products` e `dim_sellers` visando alta performance e redução de custos em ferramentas de BI.
+  3. **Data Mart (RFM):** Tabela agregada calculando a Recência, Frequência e Valor Monetário de cada cliente para análise direta de churn e LTV.
+
+## ⚙️ Orquestração (Apache Airflow)
+A DAG `lakehouse_pipeline` coordena toda a infraestrutura utilizando recursos avançados do Airflow 2.x:
+* **Dynamic Task Mapping (`.expand`):** Cria dinamicamente N tarefas de PySpark na camada Silver baseadas na lista de tabelas, otimizando o paralelismo sem poluir o código.
+* **TaskGroups:** Agrupa visualmente a execução da camada Gold, permitindo o `DROP` e `CREATE` simultâneo de todas as tabelas dimensionais e fatos, garantindo a **idempotência** do pipeline.
+* **Jinja Templating:** Gerenciamento de variáveis de ambiente do S3 diretamente nos scripts SQL (`{{ var.value.gold_bucket_path }}`).
+
+## 🚀 Como Executar
+
+### Pré-requisitos
+* Conta AWS com credenciais configuradas (`~/.aws/credentials`).
+* Terraform instalado.
+* Astro CLI instalado (para rodar o Apache Airflow localmente).
+
+### Passos
+1. **Infraestrutura (Terraform):**
+   ```bash
+   cd terraform
+   terraform init
+   terraform apply
+   ```
+2. **Subir os Scripts PySpark e SQL:**
+   Certifique-se de que o arquivo `spark_iceberg_merge.py` e a pasta de queries SQL estão na pasta `include/`.
+3. **Iniciar o Airflow:**
+   ```bash
+   astro dev start
+   ```
+4. **Execução:**
+   Acesse `http://localhost:8080`, ative a DAG `lakehouse_pipeline` e clique em *Trigger DAG*.
